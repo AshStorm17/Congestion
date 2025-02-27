@@ -10,3 +10,7 @@ To clear the mininet topology
 sudo mn -c
 ```
 
+Make a capture.pcap file and run
+```
+chmod 777 capture.pcap
+```
