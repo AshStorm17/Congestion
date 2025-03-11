@@ -2,6 +2,7 @@ from mininet.topo import Topo
 from mininet.net import Mininet
 from mininet.node import RemoteController, OVSSwitch
 from mininet.cli import CLI
+import os
 import time
 
 class Topology(Topo):
@@ -54,16 +55,38 @@ def run_experiment():
         tcpdump_pid = server.cmd(f'tcpdump -i h7-eth0 -w {pcap_file} & echo $!').strip()
         time.sleep(2)
 
-        client.cmd(f'iperf3 -c {server.IP()} -p 5201 -b 10M -P 10 -t 150 -C {scheme} &')
+        iperf_output = f"outputs/iperf_{scheme}.txt"
+        client.cmd(f'iperf3 -c {server.IP()} -p 5201 -b 10M -P 10 -t 150 -C {scheme} > {iperf_output} &')
         time.sleep(155)
 
         server.cmd(f'kill {tcpdump_pid}')
         time.sleep(5)
 
         print(f"PCAP file saved at: {scheme}.pcap")
+        analyze_metrics(pcap_file, iperf_output, scheme)
 
     print("Experiment complete.")
     net.stop()
+
+def analyze_metrics(pcap_file, iperf_output, scheme):
+    """
+    Extracts and analyzes throughput, goodput, packet loss, and window size from the PCAP and iperf logs.
+    """
+    print(f"\nAnalyzing results for {scheme}...")
+
+    # Throughput calculation (Bytes per second)
+    os.system(f"sudo tshark -r {pcap_file} -q -z io,stat,1 > outputs/throughput_{scheme}.txt")
+    
+    # Goodput (Extract only the payload bytes)
+    os.system(f"sudo tshark -r {pcap_file} -Y 'tcp.payload' | wc -l > outputs/goodput_{scheme}.txt")
+
+    # Packet loss rate (SYN packets that did not receive SYN-ACK)
+    os.system(f"sudo tshark -r {pcap_file} -Y 'tcp.analysis.lost_segment' | wc -l > outputs/loss_{scheme}.txt")
+
+    # Maximum Window Size achieved
+    os.system(f"sudo tshark -r {pcap_file} -Y 'tcp.window_size_value' -T fields -e tcp.window_size_value | sort -nr | head -1 > outputs/window_{scheme}.txt")
+
+    print(f"Analysis complete for {scheme}. Check outputs directory for results.")
 
 if __name__ == '__main__':
     run_experiment()
