@@ -6,7 +6,7 @@ from mininet.cli import CLI
 import time
 
 class Topology(Topo):
-    def build(self, loss=0):
+    def build(self, loss=0):  
         # switches
         s1 = self.addSwitch('s1')
         s2 = self.addSwitch('s2')
@@ -31,38 +31,50 @@ class Topology(Topo):
         self.addLink(h6, s4)
         self.addLink(h7, s4)  # H7 is the server
 
-        self.addLink(s2, s3, bw=50, loss=loss)   
-        self.addLink(s3, s4, bw=100, loss=loss)  
+        # configuring links with bandwidth and loss
+        self.addLink(s1, s2, bw=100)  
+        self.addLink(s2, s3, bw=50, loss=loss)  
+        self.addLink(s3, s4, bw=100)  
 
-def run_experiment():
+def run_test(test_name, clients, cc=["reno","bic", "highspeed"]):
     net = Mininet(topo=Topology())
     net.start()
 
     server = net.get('h7')
-    client = net.get('h3')  
-
-    server.cmd('iperf3 -s &')
-
-    # Congestion control schemes
-    cc = ["reno","bic", "highspeed"]
-
+    
     for scheme in cc:
-        print(f"Running experiment with {scheme} congestion control...")
+        print(f"Running {test_name} with {scheme} congestion control...")
+        
+        # server
+        server.cmd('iperf3 -s -D &')
+        time.sleep(2)
 
-        pcap_file = f"$(pwd)/outputs/c_{scheme}.pcap"
+        # packet capture
+        pcap_file = f"$(pwd)/outputs/{test_name}_{scheme}.pcap"
         tcpdump_pid = server.cmd(f'tcpdump -i h7-eth0 -w {pcap_file} & echo $!').strip()
-        time.sleep(2)  
+        time.sleep(2)
 
-        client.cmd(f'iperf3 -c {server.IP()} -p 5201 -b 10M -P 10 -t 150 -C {scheme} &')
-        time.sleep(155) 
+        # clients
+        for client_name in clients:
+            client = net.get(client_name)
+            client.cmd(f'iperf3 -c {server.IP()} -p 5201 -b 10M -P 10 -t 150 -C {scheme} &')
 
+        time.sleep(155)
+
+        # stoping packet capture
         server.cmd(f'kill {tcpdump_pid}')
-        time.sleep(5)  
+        server.cmd('pkill iperf3')  
+        print(f"PCAP file saved: outputs/{test_name}_{scheme}.pcap")
 
-        print(f"PCAP file saved at: outputs/c_{scheme}.pcap")
-
-    print("Experiment complete.")
-    net.stop() 
+    net.stop()
 
 if __name__ == '__main__':
-    run_experiment()
+    test_cases = {
+        "c_2a": ["h1", "h2"],
+        "c_2b": ["h1", "h3"],
+        "c_2c": ["h1", "h3", "h4"]
+    }
+    
+    for test_name, clients in test_cases.items():
+        run_test(test_name, clients)
+        time.sleep(5)  

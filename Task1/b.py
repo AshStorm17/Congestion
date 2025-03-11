@@ -44,7 +44,7 @@ def run_experiment():
     client2 = net.get('h3')
     client3 = net.get('h4')
 
-    server.cmd('iperf3 -s &')
+    server.cmd('iperf3 -s -D &')
 
     # Congestion control schemes
     cc = ["reno","bic","highspeed"]

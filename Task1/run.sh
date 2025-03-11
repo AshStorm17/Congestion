@@ -4,7 +4,7 @@
 if [[ "$1" =~ ^--option=(.*)$ ]]; then
     option="${BASH_REMATCH[1]}"
 else
-    echo "Invalid usage. Correct format: ./run_script --option={a|b|c|d}"
+    echo "Invalid usage. Correct format: ./run.sh --option={a|b|c|d}"
     exit 1
 fi
 
@@ -21,12 +21,12 @@ case "$option" in
     c)
         echo "Running c.py"
         sudo python3 c.py
-        sudo python3 c2.py
+        sudo python3 c.py
         ;;
     d)
         echo "Running d.py"
         sudo python3 d.py
-        sudo python3 d2.py
+        sudo python3 d.py
         ;;
     *)
         echo "Invalid option. Usage: ./run_script --option={a|b|c|d}"

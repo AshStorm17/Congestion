@@ -43,7 +43,7 @@ def run_experiment():
     server = net.get('h7')
     client = net.get('h1')
 
-    server.cmd('iperf3 -s &')
+    server.cmd('iperf3 -s -D &')
 
     # Congestion control schemes
     cc = ["reno","bic","highspeed"]
@@ -71,21 +71,47 @@ def run_experiment():
 def analyze_metrics(pcap_file, iperf_output, scheme):
     """
     Extracts and analyzes throughput, goodput, packet loss, and window size from the PCAP and iperf logs.
+    Also generates Wireshark I/O graphs and prints the final outputs to the command line.
     """
     print(f"\nAnalyzing results for {scheme}...")
 
     # Throughput calculation (Bytes per second)
-    os.system(f"sudo tshark -r {pcap_file} -q -z io,stat,1 > outputs/throughput_{scheme}.txt")
+    throughput_file = f"outputs/throughput_{scheme}.txt"
+    os.system(f"sudo tshark -r {pcap_file} -q -z io,stat,1 > {throughput_file}")
     
     # Goodput (Extract only the payload bytes)
-    os.system(f"sudo tshark -r {pcap_file} -Y 'tcp.payload' | wc -l > outputs/goodput_{scheme}.txt")
+    goodput_file = f"outputs/goodput_{scheme}.txt"
+    os.system(f"sudo tshark -r {pcap_file} -Y 'tcp.payload' | wc -l > {goodput_file}")
 
     # Packet loss rate (SYN packets that did not receive SYN-ACK)
-    os.system(f"sudo tshark -r {pcap_file} -Y 'tcp.analysis.lost_segment' | wc -l > outputs/loss_{scheme}.txt")
+    loss_file = f"outputs/loss_{scheme}.txt"
+    os.system(f"sudo tshark -r {pcap_file} -Y 'tcp.analysis.lost_segment' | wc -l > {loss_file}")
 
     # Maximum Window Size achieved
-    os.system(f"sudo tshark -r {pcap_file} -Y 'tcp.window_size_value' -T fields -e tcp.window_size_value | sort -nr | head -1 > outputs/window_{scheme}.txt")
+    window_file = f"outputs/window_{scheme}.txt"
+    os.system(f"sudo tshark -r {pcap_file} -Y 'tcp.window_size_value' -T fields -e tcp.window_size_value | sort -nr | head -1 > {window_file}")
 
+    # Generate Wireshark I/O graphs
+    io_graph_file = f"outputs/io_graph_{scheme}.png"
+    os.system(f"sudo tshark -r {pcap_file} -q -z io,stat,1 -X lua_script:wireshark_io_graph.lua -w {io_graph_file}")
+
+    # Print the final outputs to the command line
+    with open(throughput_file, 'r') as f:
+        throughput = f.read()
+    with open(goodput_file, 'r') as f:
+        goodput = f.read()
+    with open(loss_file, 'r') as f:
+        loss = f.read()
+    with open(window_file, 'r') as f:
+        window = f.read()
+
+    print(f"\nResults for {scheme}:")
+    print(f"Throughput: {throughput}")
+    print(f"Goodput: {goodput}")
+    print(f"Packet Loss: {loss}")
+    print(f"Maximum Window Size: {window}")
+
+    print(f"Wireshark I/O graph saved at: {io_graph_file}")
     print(f"Analysis complete for {scheme}. Check outputs directory for results.")
 
 if __name__ == '__main__':

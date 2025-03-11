@@ -1,44 +1,56 @@
-# process_connections.py
-
 from collections import defaultdict
 import matplotlib.pyplot as plt
 
+# Dictionary to store connection details
 connections = defaultdict(list)
 
+# Read the connections file
 with open("connections.txt", "r") as file:
     for line in file:
-        parts = line.strip().split()
-        if len(parts) != 9:  # Ensure all fields are present
-            continue
-        time, src_ip, dst_ip, src_port, dst_port, syn, ack, fin, reset = parts
+        time, src_ip, dst_ip, src_port, dst_port, syn, ack, fin, reset = line.strip().split()
         key = (src_ip, dst_ip, src_port, dst_port)
+        reverse_key = (dst_ip, src_ip, dst_port, src_port)  # To handle flipped ports during closure
         connections[key].append((float(time), syn, ack, fin, reset))
+        connections[reverse_key].append((float(time), syn, ack, fin, reset))
 
+# Lists to store connection durations and start times
 durations = []
 start_times = []
 
+# Process each connection
 for key, packets in connections.items():
     syn_time = None
-    fin_time = None
-    reset_time = None
-
+    ack_received = False
+    connection_closed = False
+    end_time = None
+    
     for packet in packets:
         time, syn, ack, fin, reset = packet
+        time = float(time)
+
+        # Track the first SYN packet
         if syn == "1" and syn_time is None:
             syn_time = time
-        if fin == "1" and ack == "1":
-            fin_time = time
-        if reset == "1":
-            reset_time = time
 
+        # Track if an ACK is received (successful handshake)
+        if ack == "1":
+            ack_received = True
+
+        # Check if the connection is closing
+        if fin == "1" or reset == "1":
+            connection_closed = True
+            end_time = time  # Ensure we capture the earliest closing event
+
+    # Assign duration
     if syn_time is not None:
-        if fin_time is not None:
-            durations.append(fin_time - syn_time)
-        elif reset_time is not None:
-            durations.append(reset_time - syn_time)
+        if connection_closed and end_time is not None:
+            durations.append(end_time - syn_time)  # Successfully closed connection
+        elif not ack_received:
+            durations.append(100)  # Dropped connection (no ACK received)
         else:
-            durations.append(100)  # Default duration
-        start_times.append(syn_time)
+            durations.append(100)  # Connection was never closed properly
+
+        start_times.append(syn_time)  # Record the connection start time
 
 # Plot connection duration vs. connection start time
 plt.figure(figsize=(10, 6))
