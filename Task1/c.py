@@ -6,14 +6,14 @@ from mininet.cli import CLI
 import time
 
 class Topology(Topo):
-    def build(self, loss=0):  
-        # switches
+    def build(self, loss=0):
+        # Creating switches
         s1 = self.addSwitch('s1')
         s2 = self.addSwitch('s2')
         s3 = self.addSwitch('s3')
         s4 = self.addSwitch('s4')
 
-        # hosts
+        # Creating hosts
         h1 = self.addHost('h1')
         h2 = self.addHost('h2')
         h3 = self.addHost('h3')
@@ -22,7 +22,7 @@ class Topology(Topo):
         h6 = self.addHost('h6')
         h7 = self.addHost('h7')  # TCP Server
 
-        # connecting hosts to switches
+        # Connecting hosts to respective switches
         self.addLink(h1, s1)
         self.addLink(h2, s1)
         self.addLink(h3, s2)
@@ -31,50 +31,47 @@ class Topology(Topo):
         self.addLink(h6, s4)
         self.addLink(h7, s4)  # H7 is the server
 
-        # configuring links with bandwidth and loss
-        self.addLink(s1, s2, bw=100)  
-        self.addLink(s2, s3, bw=50, loss=loss)  
-        self.addLink(s3, s4, bw=100)  
+        # Connecting switches with specified bandwidth and loss
+        self.addLink(s2, s3, bw=50, loss=loss)   # 50 Mbps link with specified packet loss
+        self.addLink(s3, s4, bw=100, loss=loss)  # 100 Mbps link with specified packet loss
 
-def run_test(test_name, clients, cc=["reno","bic", "highspeed"]):
+def run_experiment():
+    # Initialize Mininet with the defined topology
     net = Mininet(topo=Topology())
     net.start()
 
+    # Assign server and client nodes
     server = net.get('h7')
-    
+    client = net.get('h3')  # Client sending data to server
+
+    # Start iperf3 server on h7
+    server.cmd('iperf3 -s &')
+
+    # List of congestion control schemes to test
+    cc = ["reno", "bic", "highspeed"]
+
     for scheme in cc:
-        print(f"Running {test_name} with {scheme} congestion control...")
-        
-        # server
-        server.cmd('iperf3 -s -D &')
-        time.sleep(2)
+        print(f"Running experiment with {scheme} congestion control...")
 
-        # packet capture
-        pcap_file = f"$(pwd)/outputs/{test_name}_{scheme}.pcap"
+        # Define output file path for packet capture
+        pcap_file = f"$(pwd)/outputs/c_{scheme}.pcap"
+
+        # Start tcpdump on the server to capture packets
         tcpdump_pid = server.cmd(f'tcpdump -i h7-eth0 -w {pcap_file} & echo $!').strip()
-        time.sleep(2)
+        time.sleep(2)  # Allow tcpdump to initialize
 
-        # clients
-        for client_name in clients:
-            client = net.get(client_name)
-            client.cmd(f'iperf3 -c {server.IP()} -p 5201 -b 10M -P 10 -t 150 -C {scheme} &')
+        # Start iperf3 client with the specified congestion control algorithm
+        client.cmd(f'iperf3 -c {server.IP()} -p 5201 -b 10M -P 10 -t 150 -C {scheme} &')
+        time.sleep(155)  # Wait for the iperf3 test to complete
 
-        time.sleep(155)
-
-        # stoping packet capture
+        # Stop tcpdump process
         server.cmd(f'kill {tcpdump_pid}')
-        server.cmd('pkill iperf3')  
-        print(f"PCAP file saved: outputs/{test_name}_{scheme}.pcap")
+        time.sleep(5)  # Ensure cleanup
 
-    net.stop()
+        print(f"PCAP file saved at: outputs/c_{scheme}.pcap")
+
+    print("Experiment complete.")
+    net.stop()  # Stop the network
 
 if __name__ == '__main__':
-    test_cases = {
-        "c_2a": ["h1", "h2"],
-        "c_2b": ["h1", "h3"],
-        "c_2c": ["h1", "h3", "h4"]
-    }
-    
-    for test_name, clients in test_cases.items():
-        run_test(test_name, clients)
-        time.sleep(5)  
+    run_experiment()
