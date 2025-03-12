@@ -1,4 +1,6 @@
-from scapy.all import *
+from scapy.all import rdpcap
+from scapy.layers.inet import TCP
+
 import matplotlib.pyplot as plt
 import pandas as pd
 
